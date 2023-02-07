@@ -138,21 +138,25 @@ event_dict = {
 @eip.subcommand()
 async def leave(ctx):
     """請假"""
-    leave_menu = interactions.SelectMenu(
-        custom_id="leave_menu",
-        options=[
-            interactions.SelectOption(label="例會", value="例會"),
-            interactions.SelectOption(label="社課", value="社課"),
-            interactions.SelectOption(label="檢討會", value="檢討會"),
-            interactions.SelectOption(label="專案", value="專案"),
-        ],
-    )
-    discord_id = f'{ctx.author.username}#{ctx.author.discriminator}'
-    entry = check_df(u"1111-cadre", discord_id).get()
-    if entry.exists:
-        await ctx.send("請選擇欲請假的活動類型", components=leave_menu)
-    else:
-        await ctx.send(":warning: 這個功能僅限現任幹部使用", ephemeral=True)
+    try:
+        leave_menu = interactions.SelectMenu(
+            custom_id="leave_menu",
+            options=[
+                interactions.SelectOption(label="例會", value="例會"),
+                interactions.SelectOption(label="社課", value="社課"),
+                interactions.SelectOption(label="檢討會", value="檢討會"),
+                interactions.SelectOption(label="專案", value="專案"),
+            ],
+        )
+        discord_id = f'{ctx.author.username}#{ctx.author.discriminator}'
+        entry = check_df(u"1111-cadre", discord_id).get()
+        if entry.exists:
+            await ctx.send("請選擇欲請假的活動類型", components=leave_menu)
+        
+        else:
+            await ctx.send(":warning: 這個功能僅限現任幹部使用", ephemeral=True)
+    except Exception:
+            pass
 
 @bot.component("leave_menu")
 async def callback(ctx, response: str):
@@ -186,66 +190,75 @@ async def callback(ctx, response: str):
         ],
         custom_id = str(custom_id)
     )
-    await ctx.popup(modal)
-    await ctx.message.delete()
+    try:
+        await ctx.popup(modal)
+        await ctx.message.delete()
+    except Exception:
+            pass
 
 @bot.persistent_modal("leave_form")
 async def modal_response(ctx, event_type, leave_date: str, leave_type: str, leave_reason: str):
-    leave_date = validate_date(leave_date)
-    if leave_date:
-        leave_delta = (leave_date - dt.today().date()).days
-        if leave_delta > 0: #確保不可在當天或逾期請假
-            channel = await get(bot, interactions.Channel, object_id=env.leave_channel)
-            discord_id = f'{ctx.author.username}#{ctx.author.discriminator}'
-            timestamp = dt.now().isoformat()
-            leave_name = list(event_dict.keys())[list(event_dict.values()).index(event_type)]
-            # logging.info(f"Leave =>")
-            embeds=interactions.Embed(title=f"【{leave_name}】請假單", color=0x00bfff)
-            embeds.set_author(name=f"{id_to_name(discord_id, '1111-cadre')}", icon_url=f"{ctx.author.avatar_url}?size=1024")
-            embeds.set_thumbnail(url="https://media.discordapp.net/attachments/1031820876032782346/1056797437676769330/3e5d8d13beec7333.png")
-            embeds.add_field(name="假別", value=f"{leave_type}\a\a\a\a", inline=True)
-            embeds.add_field(name="時間", value=f"{leave_date}", inline=True)
-            embeds.add_field(name="請假原因", value=f"{leave_reason}", inline=False)
-            embeds.set_footer(text=f"假單序號：{timestamp}")
-            result = await channel.send(embeds=embeds)
-            btn_custom_id = interactions.ext.persistence.PersistentCustomID(
-                bot,
-                "btn_revoke_leave",
-                [str(result.id), timestamp],
-            )
+    try:
+        leave_date = validate_date(leave_date)
+        if leave_date:
+            leave_delta = (leave_date - dt.today().date()).days
+            if leave_delta > 0: #確保不可在當天或逾期請假
+                channel = await get(bot, interactions.Channel, object_id=env.leave_channel)
+                discord_id = f'{ctx.author.username}#{ctx.author.discriminator}'
+                timestamp = dt.now().isoformat()
+                leave_name = list(event_dict.keys())[list(event_dict.values()).index(event_type)]
+                # logging.info(f"Leave =>")
+                embeds=interactions.Embed(title=f"【{leave_name}】請假單", color=0x00bfff)
+                embeds.set_author(name=f"{id_to_name(discord_id, '1111-cadre')}", icon_url=f"{ctx.author.avatar_url}?size=1024")
+                embeds.set_thumbnail(url="https://media.discordapp.net/attachments/1031820876032782346/1056797437676769330/3e5d8d13beec7333.png")
+                embeds.add_field(name="假別", value=f"{leave_type}\a\a\a\a", inline=True)
+                embeds.add_field(name="時間", value=f"{leave_date}", inline=True)
+                embeds.add_field(name="請假原因", value=f"{leave_reason}", inline=False)
+                embeds.set_footer(text=f"假單序號：{timestamp}")
+                result = await channel.send(embeds=embeds)
+                btn_custom_id = interactions.ext.persistence.PersistentCustomID(
+                    bot,
+                    "btn_revoke_leave",
+                    [str(result.id), timestamp],
+                )
 
-            db.collection(u'1111-leave').document(timestamp).set({
-                u'date': timestamp,
-                u'name': discord_id,
-                u'type': leave_type,
-                u'reason': leave_reason
-            })
-            db.collection(u'1111-cadre').document(discord_id).update({
-                u'leave_record': firestore.ArrayUnion([timestamp])
-            })
+                db.collection(u'1111-leave').document(timestamp).set({
+                    u'date': timestamp,
+                    u'name': discord_id,
+                    u'type': leave_type,
+                    u'reason': leave_reason
+                })
+                db.collection(u'1111-cadre').document(discord_id).update({
+                    u'leave_record': firestore.ArrayUnion([timestamp])
+                })
 
-            button = interactions.Button(
-                style = interactions.ButtonStyle.DANGER,
-                label = "↻ 撤回",
-                custom_id = str(btn_custom_id)  
-            )
-            await ctx.send("", components=button)
+                button = interactions.Button(
+                    style = interactions.ButtonStyle.DANGER,
+                    label = "↻ 撤回",
+                    custom_id = str(btn_custom_id)  
+                )
+                await ctx.send("", components=button)
+            else:
+                await ctx.send("請假不可於當天/逾期請！\n如有急事非請不可，請在 <#1022436666251677737> 表示請假原因。", ephemeral=True)
         else:
-            await ctx.send("請假不可於當天/逾期請！\n如有急事非請不可，請在 <#1022436666251677737> 表示請假原因。", ephemeral=True)
-    else:
-        await ctx.send("時間格式不正確，請確認是否為 `MM/DD`", ephemeral=True)
+            await ctx.send("時間格式不正確，請確認是否為 `MM/DD`", ephemeral=True)
+    except Exception:
+            pass
 
 @bot.persistent_component("btn_revoke_leave")
 async def button_response(ctx, payload: list):
-    btn_custom_id, timestamp = payload
-    discord_id = f'{ctx.author.username}#{ctx.author.discriminator}'
-    db.collection(u'1111-leave').document(timestamp).delete()
-    db.collection(u'1111-cadre').document(discord_id).update({
-        u'leave_record': firestore.ArrayRemove([timestamp])
-    })
-    await ctx.message.edit(f"已撤回假單")
-    message = await get(bot, interactions.Message, object_id=btn_custom_id)
-    await message.delete()
+    try:
+        btn_custom_id, timestamp = payload
+        discord_id = f'{ctx.author.username}#{ctx.author.discriminator}'
+        db.collection(u'1111-leave').document(timestamp).delete()
+        db.collection(u'1111-cadre').document(discord_id).update({
+            u'leave_record': firestore.ArrayRemove([timestamp])
+        })
+        await ctx.message.edit(f"已撤回假單")
+        message = await get(bot, interactions.Message, object_id=btn_custom_id)
+        await message.delete()
+    except Exception:
+            pass
 
 #-----------公告-----------
 announcement_dict = {
@@ -256,19 +269,22 @@ announcement_dict = {
 @eip.subcommand()
 async def announcement(ctx):
     """公告"""
-    announcement_menu = interactions.SelectMenu(
-        custom_id="announcement_menu",
-        options=[
-            interactions.SelectOption(label="活動公告", value="活動公告"),
-            interactions.SelectOption(label="會議通知", value="會議通知"),
-        ],
-    )
-    discord_id = f'{ctx.author.username}#{ctx.author.discriminator}'
-    entry = check_df(u"1111-cadre", discord_id).get()
-    if entry.exists:
-        await ctx.send("請選擇欲公告類型", components=announcement_menu)
-    else:
-        await ctx.send(":warning: 這個功能僅限現任幹部使用", ephemeral=True)
+    try:
+        announcement_menu = interactions.SelectMenu(
+            custom_id="announcement_menu",
+            options=[
+                interactions.SelectOption(label="活動公告", value="活動公告"),
+                interactions.SelectOption(label="會議通知", value="會議通知"),
+            ],
+        )
+        discord_id = f'{ctx.author.username}#{ctx.author.discriminator}'
+        entry = check_df(u"1111-cadre", discord_id).get()
+        if entry.exists:
+            await ctx.send("請選擇欲公告類型", components=announcement_menu)
+        else:
+            await ctx.send(":warning: 這個功能僅限現任幹部使用", ephemeral=True)
+    except Exception:
+            pass
 
 @bot.component("announcement_menu")
 async def callback(ctx, response: str):
@@ -313,31 +329,37 @@ async def callback(ctx, response: str):
         ],
         custom_id = str(custom_id)
     )
-    await ctx.popup(modal)
-    await ctx.message.delete()
+    try:
+        await ctx.popup(modal)
+        await ctx.message.delete()
+    except Exception:
+            pass
 
 @bot.persistent_modal("announcement_form")
 async def modal_response(ctx, announcement_type, announcement_title: str, announcement_date:str, announcement_time:str, announcement_location:str, announcement_content: str):
-    if announcement_date:
-        announcement_date = validate_date(announcement_date)
-        if not announcement_date:
-            await ctx.send("日期格式不正確，請確認是否為 `YYYY-MM-DD`", ephemeral=True)
-            return
-    if announcement_time:
-        announcement_time = validate_time(announcement_time)
-        if not announcement_time:
-            await ctx.send("時間格式不正確，請確認是否為 `HH-MM`", ephemeral=True)
-            return
-    channel = await get(bot, interactions.Channel, object_id=env.announcement_channel)
-    name = list(announcement_dict.keys())[list(announcement_dict.values()).index(announcement_type)]
-    msg = f"【{name}】\n" +\
-        f"標題：{announcement_title}\n" +\
-        (f"日期：{announcement_date}\n" if announcement_date else "") +\
-        (f"時間：{announcement_time}\n" if announcement_time else "") +\
-        (f"地點：{announcement_location}\n" if announcement_location else "") +\
-        f"主持人：{announcement_content}"
-    await channel.send(msg)
-    await ctx.send("已發公告")
-    await ctx.message.delete()
+    try:
+        if announcement_date:
+            announcement_date = validate_date(announcement_date)
+            if not announcement_date:
+                await ctx.send("日期格式不正確，請確認是否為 `YYYY-MM-DD`", ephemeral=True)
+                return
+        if announcement_time:
+            announcement_time = validate_time(announcement_time)
+            if not announcement_time:
+                await ctx.send("時間格式不正確，請確認是否為 `HH-MM`", ephemeral=True)
+                return
+        channel = await get(bot, interactions.Channel, object_id=env.announcement_channel)
+        name = list(announcement_dict.keys())[list(announcement_dict.values()).index(announcement_type)]
+        msg = f"【{name}】\n" +\
+            f"標題：{announcement_title}\n" +\
+            (f"日期：{announcement_date}\n" if announcement_date else "") +\
+            (f"時間：{announcement_time}\n" if announcement_time else "") +\
+            (f"地點：{announcement_location}\n" if announcement_location else "") +\
+            f"主持人：{announcement_content}"
+        await channel.send(msg)
+        await ctx.send("已發公告")
+        await ctx.message.delete()
+    except Exception:
+            pass
 
 bot.start()
